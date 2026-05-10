@@ -1,0 +1,27 @@
+---
+title: "data science ii final project"
+author: "Yiying Chen yc4776"
+date: "2026-05-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r library}
+```
+
+```{r data_cleaning}
+# Load the full dataset (loads object `dat` into your environment)
+load("severity.RData")
+
+# Make sure there is no na value in original dataset
+sum(is.na(dat))
+
+# Set the random seed to the last 4 digits of YOUR UNI
+set.seed(4776)
+
+# Randomly sample 1,000 participants for your analysis
+severity <- dat[sample(nrow(dat), 1000), ]
+```
