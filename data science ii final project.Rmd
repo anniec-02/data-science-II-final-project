@@ -9,7 +9,11 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r library}
+```{r library, warning=FALSE, message=FALSE}
+library(tidymodels)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
 ```
 
 ```{r data_cleaning}
@@ -24,4 +28,48 @@ set.seed(4776)
 
 # Randomly sample 1,000 participants for your analysis
 severity <- dat[sample(nrow(dat), 1000), ]
+
+# convert categorical variables into factors
+severity <- severity |>
+  mutate(
+    gender = factor(gender, levels = c(0, 1), labels = c("Female", "Male")),
+    race = factor(race, levels = c(1, 2, 3, 4), labels = c("White", "Asian", "Black", "Hispanic")),
+    smoking = factor(smoking, levels = c(0, 1, 2), labels = c("Never smoked", "Former smoker", "Current smoker")),
+    diabetes = factor(diabetes, levels = c(0, 1), labels = c("No", "Yes")),
+    hypertension = factor(hypertension, levels = c(0, 1), labels = c("No", "Yes")),
+    vaccine = factor(vaccine, levels = c(0, 1), labels = c("Not vaccinated", "Vaccinated")),
+    severity = factor(severity, levels = c(0, 1), labels = c("Not severe", "Severe"))
+  )
+
+# Randomly split the data into 80:20
+set.seed(4776)
+data_split <- initial_split(severity, prop = 0.8)
+training_data <- training(data_split)
+testing_data <- testing(data_split)
+```
+
+```{r summary_statistics}
+# size of original dataset
+dim(dat)
+
+# summary of 1000 random samples
+summary(severity)
+```
+
+```{r data_visualization}
+# plots for continuous variables
+severity |>
+  select(age, height, weight, bmi, SBP, LDL, depression) |>
+  pivot_longer(cols = everything(),
+               names_to = "variable",
+               values_to = "value") |>
+  ggplot(aes(x = value)) +
+  geom_histogram(bins = 30, fill = "skyblue", color = "black") +
+  facet_wrap(~ variable, scales = "free", ncol = 3) +
+  theme_minimal() +
+  labs(
+    title = "Distribution of Continuous Variables",
+    x = "Value",
+    y = "Count"
+  )
 ```
