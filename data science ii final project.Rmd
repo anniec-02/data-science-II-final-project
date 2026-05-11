@@ -14,6 +14,8 @@ library(tidymodels)
 library(dplyr)
 library(tidyr)
 library(ggplot2)
+library(caret)
+library(pROC)
 ```
 
 ```{r data_cleaning}
@@ -30,15 +32,17 @@ set.seed(4776)
 severity <- dat[sample(nrow(dat), 1000), ]
 
 # convert categorical variables into factors
+# avoid leaving blanks in the label
 severity <- severity |>
+  select(-id) |>
   mutate(
     gender = factor(gender, levels = c(0, 1), labels = c("Female", "Male")),
     race = factor(race, levels = c(1, 2, 3, 4), labels = c("White", "Asian", "Black", "Hispanic")),
-    smoking = factor(smoking, levels = c(0, 1, 2), labels = c("Never smoked", "Former smoker", "Current smoker")),
+    smoking = factor(smoking, levels = c(0, 1, 2), labels = c("Never_smoked", "Former_smoker", "Current_smoker")),
     diabetes = factor(diabetes, levels = c(0, 1), labels = c("No", "Yes")),
     hypertension = factor(hypertension, levels = c(0, 1), labels = c("No", "Yes")),
-    vaccine = factor(vaccine, levels = c(0, 1), labels = c("Not vaccinated", "Vaccinated")),
-    severity = factor(severity, levels = c(0, 1), labels = c("Not severe", "Severe"))
+    vaccine = factor(vaccine, levels = c(0, 1), labels = c("Not_vaccinated", "Vaccinated")),
+    severity = factor(severity, levels = c(0, 1), labels = c("Not_severe", "Severe"))
   )
 
 ```
@@ -141,5 +145,41 @@ testing_data <- testing(data_split)
 ctrl <- trainControl(method = "cv", number = 10, 
                      summaryFunction = twoClassSummary, 
                      classProbs = TRUE, savePredictions = "final")
+```
+
+```{r logistic_regression}
+set.seed(4776)
+
+# train logistic regression model with CV
+model.glm <- train(x = training_data[0:13],
+                   y = training_data$severity,
+                   method = "glm",
+                   metric = "ROC",
+                   trControl = ctrl)
+
+summary(model.glm$finalModel) # Check logistic regression coefficients and p-value
+
+# predictions on test data 
+glm.prob <- predict(model.glm, newdata = testing_data, type = "prob")
+glm.pred <- glm.prob[, "Severe"]
+
+
+
+
+```
+
+```{r ROC}
+# compute ROC for each model
+roc.glm <- roc(testing_data$severity, glm.pred)
+
+# calculate AUC values for each model
+#auc <- c(roc.glm$auc[1], roc.glmn$auc[1],
+#roc.gam$auc[1], roc.mars$auc[1])
+
+# plot the roc curve
+plot(roc.glm, legacy.axes = TRUE)
+```
+
+```{r CV_plots}
 ```
 
