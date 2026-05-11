@@ -2,7 +2,7 @@
 title: "data science ii final project"
 author: "Yiying Chen yc4776"
 date: "2026-05-10"
-output: html_document
+output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
@@ -16,6 +16,8 @@ library(tidyr)
 library(ggplot2)
 library(caret)
 library(pROC)
+library(e1071)
+library(patchwork)
 ```
 
 ```{r data_cleaning}
@@ -190,22 +192,51 @@ gbmA.pred <- predict(gbmA.fit, newdata = testing_data, type = "prob")[,"Severe"]
 summary(gbmA.fit$finalModel, las = 2, cBars = 19, cex.axis = 0.6)
 ```
 
-```{r ROC}
+```{r SVM}
+# set up the grid for SVM model
+svm_grid <- expand.grid(sigma = c(0.001, 0.005, 0.01, 0.05),
+                        C = c(0.25, 0.5, 1, 2, 4))
+
+set.seed(4776)
+
+# train SVM model with CV
+model.svm <- train(severity ~ .,
+                   data = training_data,
+                   method = "svmRadial",
+                   trControl = ctrl,
+                   preProcess = c("center", "scale"),
+                   tuneGrid = svm_grid,
+                   metric = "ROC")
+
+# predictions on test data 
+svm.pred <- predict(model.svm, newdata = testing_data, type = "prob")[,"Severe"]
+```
+
+```{r ROC, warning=FALSE, message=FALSE}
 # compute ROC for each model
 roc.glm <- roc(testing_data$severity, glm.pred)
 roc.gbmA <- roc(testing_data$severity, gbmA.pred)
+roc.svm <- roc(testing_data$severity, svm.pred)
 
 # calculate AUC values for each model
-#auc <- c(roc.glm$auc[1], roc.glmn$auc[1],
-#roc.gam$auc[1], roc.mars$auc[1])
+auc <- c(roc.glm$auc[1], roc.gbmA$auc[1], roc.svm$auc[1])
+auc
 
 # plot the roc curve
 plot(roc.glm, legacy.axes = TRUE)
 plot(roc.gbmA, add = TRUE, col = 2)
+plot(roc.svm, add = TRUE, col = 3)
 ```
 
 ```{r CV_plots, warning=FALSE, message=FALSE}
 # CV plots for boosting
-ggplot(gbmA.fit, highlight = TRUE)
-```
+p_gbm <- ggplot(gbmA.fit, highlight = TRUE) +
+  labs(title = "Boosting Cross Validation Plot") +
+  theme(plot.title = element_text(hjust = 0.5))
 
+p_svm <- ggplot(model.svm, highlight = TRUE) +
+  labs(title = "SVM Cross Validation Plot") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+p_gbm + p_svm
+```
