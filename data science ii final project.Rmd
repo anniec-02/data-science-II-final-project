@@ -57,7 +57,7 @@ summary(severity)
 ```
 
 ```{r data_visualization}
-# plots for continuous variables
+# histogram plots for continuous variables distribution
 severity |>
   select(age, height, weight, bmi, SBP, LDL, depression) |>
   pivot_longer(cols = everything(),
@@ -71,5 +71,66 @@ severity |>
     title = "Distribution of Continuous Variables",
     x = "Value",
     y = "Count"
+  )
+
+# box plots to observe the relationship between each continuous variable with response variable severity
+severity |>
+  select(severity, age, height, weight, bmi, SBP, LDL, depression) |>
+  pivot_longer(
+    cols = -severity,
+    names_to = "variable",
+    values_to = "value"
+  ) |>
+  ggplot(aes(x = severity, y = value)) +
+  geom_boxplot(fill = "skyblue", color = "black") +
+  facet_wrap(~ variable, scales = "free_y", ncol = 3) +
+  theme_minimal() +
+  labs(
+    title = "Continuous Variables by COVID-19 Severity",
+    x = "COVID-19 Severity",
+    y = "Value"
+  )
+
+# bar plots for categorical variables distribution
+severity |>
+  select(gender, race, smoking, diabetes, hypertension, vaccine, severity) |>
+  pivot_longer(
+    cols = everything(),
+    names_to = "variable",
+    values_to = "category"
+  ) |>
+  ggplot(aes(x = category)) +
+  geom_bar(fill = "skyblue", color = "black") +
+  facet_wrap(~ variable, scales = "free_x", ncol = 3) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) +
+  labs(
+    title = "Distribution of Categorical Variables",
+    x = "Category",
+    y = "Count"
+  )
+
+# proportion bar plots to observe the relationship between each categorical variable with response variable severity
+severity |>
+  select(severity, gender, race, smoking, diabetes, hypertension, vaccine) |>
+  pivot_longer(
+    cols = -severity,
+    names_to = "variable",
+    values_to = "category"
+  ) |>
+  ggplot(aes(x = category, fill = severity)) +
+  geom_bar(position = "fill", color = "black") +
+  facet_wrap(~ variable, scales = "free_x", ncol = 3) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  ) +
+  labs(
+    title = "Proportion of COVID-19 Severity by Categorical Variables",
+    x = "Category",
+    y = "Proportion",
+    fill = "Severity"
   )
 ```
