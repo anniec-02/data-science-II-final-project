@@ -162,15 +162,38 @@ summary(model.glm$finalModel) # Check logistic regression coefficients and p-val
 # predictions on test data 
 glm.prob <- predict(model.glm, newdata = testing_data, type = "prob")
 glm.pred <- glm.prob[, "Severe"]
+```
 
+```{r boosting}
+# set up the grid for boosting model
+gbmA.grid <- expand.grid(n.trees = c(100,200,500,1000,2000,5000,10000),
+                         interaction.depth = 1:5,
+                         shrinkage = c(0.001, 0.003, 0.005),
+                         n.minobsinnode = 10)
 
+set.seed(4776)
 
+# train boosting model with CV
+gbmA.fit <- train(severity ~ . ,
+                  training_data,
+                  tuneGrid = gbmA.grid,
+                  trControl = ctrl,
+                  method = "gbm",
+                  distribution = "adaboost",
+                  metric = "ROC",
+                  verbose = FALSE)
 
+# predictions on test data 
+gbmA.pred <- predict(gbmA.fit, newdata = testing_data, type = "prob")[,"Severe"]
+
+# variable importance
+summary(gbmA.fit$finalModel, las = 2, cBars = 19, cex.axis = 0.6)
 ```
 
 ```{r ROC}
 # compute ROC for each model
 roc.glm <- roc(testing_data$severity, glm.pred)
+roc.gbmA <- roc(testing_data$severity, gbmA.pred)
 
 # calculate AUC values for each model
 #auc <- c(roc.glm$auc[1], roc.glmn$auc[1],
@@ -178,8 +201,11 @@ roc.glm <- roc(testing_data$severity, glm.pred)
 
 # plot the roc curve
 plot(roc.glm, legacy.axes = TRUE)
+plot(roc.gbmA, add = TRUE, col = 2)
 ```
 
-```{r CV_plots}
+```{r CV_plots, warning=FALSE, message=FALSE}
+# CV plots for boosting
+ggplot(gbmA.fit, highlight = TRUE)
 ```
 
