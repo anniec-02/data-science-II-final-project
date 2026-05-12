@@ -156,25 +156,45 @@ ctrl <- trainControl(method = "cv", number = 10,
 set.seed(4776)
 
 # train logistic regression model with CV
-model.glm <- train(x = training_data[0:13],
-                   y = training_data$severity,
+model.glm <- train(severity ~ ., data = training_data,
                    method = "glm",
                    metric = "ROC",
                    trControl = ctrl)
 
 summary(model.glm$finalModel) # Check logistic regression coefficients and p-value
 
+# predictions on test data
+glm.pred.class <- predict(model.glm, newdata = testing_data)
+glm.pred <- predict(model.glm, newdata = testing_data, type = "prob")[,"Severe"]
+```
+
+# Penalized logistic regression
+```{r penalized_logistic_regression}
+# define tuning grid for penalized logistic regression
+glmnGrid <- expand.grid(.alpha = seq(0, 1, length = 21),
+                        .lambda = exp(seq(-8, -1, length = 50)))
+
+# train penalized logistic regression model with CV
+set.seed(4776)
+model.glmn <- train(severity ~ ., data = training_data,
+                    method = "glmnet",
+                    tuneGrid = glmnGrid,
+                    metric = "ROC",
+                    trControl = ctrl)
+
+summary(model.glmn$finalModel) # Check penalized logistic regression coefficients and p-value
+
 # predictions on test data 
-glm.prob <- predict(model.glm, newdata = testing_data, type = "prob")
-glm.pred <- glm.prob[, "Severe"]
+glmn.pred.class <- predict(model.glmn, newdata = testing_data)
+glmn.pred <- predict(model.glmn, newdata = testing_data, type = "prob")[,"Severe"]
 ```
 
 # Boosting
 ```{r boosting}
 # set up the grid for boosting model
-gbmA.grid <- expand.grid(n.trees = c(100,200,500,1000,2000,5000,10000),
-                         interaction.depth = 1:5,
-                         shrinkage = c(0.001, 0.003, 0.005),
+gbmA.grid <- expand.grid(n.trees = c(500, 1000, 2000, 3000, 5000),
+                         interaction.depth = 1:4,
+                         shrinkage = c(0.001, 0.005, 0.01),
                          n.minobsinnode = 10)
 
 set.seed(4776)
@@ -190,13 +210,11 @@ model.gbm <- train(severity ~ . ,
                   verbose = FALSE)
 
 # predictions on test data 
+gbm.pred.class <- predict(model.gbm, newdata = testing_data)
 gbmA.pred <- predict(model.gbm, newdata = testing_data, type = "prob")[,"Severe"]
-
-# variable importance
-summary(model.gbm$finalModel, las = 2, cBars = 19, cex.axis = 0.6)
 ```
-# SVM
 
+# SVM
 ```{r SVM}
 # set up the grid for SVM model
 svm_grid <- expand.grid(sigma = c(0.001, 0.005, 0.01, 0.05),
@@ -213,7 +231,8 @@ model.svm <- train(severity ~ .,
                    tuneGrid = svm_grid,
                    metric = "ROC")
 
-# predictions on test data 
+# predictions on test data
+svm.pred.class <- predict(model.svm, newdata = testing_data)
 svm.pred <- predict(model.svm, newdata = testing_data, type = "prob")[,"Severe"]
 ```
 
@@ -236,27 +255,56 @@ p_gbm + p_svm
 ```{r model_training_validation}
 # compare models using resampling
 res <- resamples(list(GLM = model.glm,
+                      GLMN = model.glmn,
                       Boosting = model.gbm,
                       SVM = model.svm))
 summary(res)
 
 # boxplot of ROC performance for all models
 bwplot(res, metric = "ROC")
+
+# dotplot of ROC performance for all models
+dotplot(res, metric = "ROC")
 ```
 
 # model selection
 ```{r model_selection, warning=FALSE, message=FALSE}
 # compute ROC for each model
 roc.glm <- roc(testing_data$severity, glm.pred)
+roc.glmn <- roc(testing_data$severity, glmn.pred)
 roc.gbmA <- roc(testing_data$severity, gbmA.pred)
 roc.svm <- roc(testing_data$severity, svm.pred)
 
 # plot the roc curve
-plot(roc.glm, legacy.axes = TRUE)
+plot(roc.glm, legacy.axes = TRUE, main = "ROC Curves")
 plot(roc.gbmA, add = TRUE, col = 2)
 plot(roc.svm, add = TRUE, col = 3)
+plot(roc.glmn, add = TRUE, col = 4)
+legend("bottomright", 
+       legend = c(paste0("GLM (AUC=", round(roc.glm$auc, 3), ")"),
+                  paste0("GLMN (AUC=", round(roc.glmn$auc, 3), ")"),
+                  paste0("GBM (AUC=", round(roc.gbmA$auc, 3), ")"),
+                  paste0("SVM (AUC=", round(roc.svm$auc, 3), ")")),
+       col = 1:4, lwd = 2)
 
 # calculate AUC values for each model
-auc <- c(roc.glm$auc[1], roc.gbmA$auc[1], roc.svm$auc[1])
+auc <- c(roc.glm$auc[1], roc.gbmA$auc[1], roc.svm$auc[1], roc.glmn$auc[1])
 auc
+
+# Accuracy table for four models
+conf_matrix_glm <- confusionMatrix(glm.pred.class, testing_data$severity)
+conf_matrix_glmn <- confusionMatrix(glmn.pred.class, testing_data$severity)
+conf_matrix_gbm <- confusionMatrix(gbm.pred.class, testing_data$severity)
+conf_matrix_svm <- confusionMatrix(svm.pred.class, testing_data$severity)
+
+conf_matrix_glm$overall["Accuracy"]
+conf_matrix_glmn$overall["Accuracy"]
+conf_matrix_gbm$overall["Accuracy"]
+conf_matrix_svm$overall["Accuracy"]
+```
+
+# variable importance
+```{r variable_importance}
+# variable importance of boosting model (highest AUC)
+summary(model.gbm$finalModel, las = 2, cBars = 19, cex.axis = 0.2)
 ```
