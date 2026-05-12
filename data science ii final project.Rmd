@@ -57,6 +57,32 @@ dim(dat)
 
 # summary of 1000 random samples
 summary(severity)
+
+# obtain the mean value of continuous variable by severity
+severity |>
+  group_by(severity) |>
+  summarise(
+    n = n(),
+    age_mean = round(mean(age), 1),
+    height_mean = round(mean(height), 1),
+    weight_mean = round(mean(weight), 1),
+    bmi_mean = round(mean(bmi), 1),
+    SBP_mean = round(mean(SBP), 1),
+    LDL_mean = round(mean(LDL), 1),
+    depression_mean = round(mean(depression), 1)
+  )
+
+# obtain the proportion of continuous variable by severity
+severity |>
+  select(gender, race, smoking, diabetes, hypertension, vaccine) |>
+  pivot_longer(
+    cols = -severity,
+    names_to = "variable",
+    values_to = "category"
+  ) |>
+  count(severity, variable, category) |>
+  group_by(severity, variable) |>
+  mutate(percent = round(n / sum(n) * 100, 1))
 ```
 # EDA
 ```{r data_visualization}
@@ -161,8 +187,6 @@ model.glm <- train(severity ~ ., data = training_data,
                    metric = "ROC",
                    trControl = ctrl)
 
-summary(model.glm$finalModel) # Check logistic regression coefficients and p-value
-
 # predictions on test data
 glm.pred.class <- predict(model.glm, newdata = testing_data)
 glm.pred <- predict(model.glm, newdata = testing_data, type = "prob")[,"Severe"]
@@ -181,8 +205,6 @@ model.glmn <- train(severity ~ ., data = training_data,
                     tuneGrid = glmnGrid,
                     metric = "ROC",
                     trControl = ctrl)
-
-summary(model.glmn$finalModel) # Check penalized logistic regression coefficients and p-value
 
 # predictions on test data 
 glmn.pred.class <- predict(model.glmn, newdata = testing_data)
@@ -288,7 +310,7 @@ legend("bottomright",
        col = 1:4, lwd = 2)
 
 # calculate AUC values for each model
-auc <- c(roc.glm$auc[1], roc.gbmA$auc[1], roc.svm$auc[1], roc.glmn$auc[1])
+auc <- c(roc.glm$auc[1], roc.glmn$auc[1], roc.gbmA$auc[1], roc.svm$auc[1])
 auc
 
 # Accuracy table for four models
@@ -306,5 +328,9 @@ conf_matrix_svm$overall["Accuracy"]
 # variable importance
 ```{r variable_importance}
 # variable importance of boosting model (highest AUC)
-summary(model.gbm$finalModel, las = 2, cBars = 19, cex.axis = 0.2)
+par(mar = c(5, 14, 4, 2))
+summary(model.gbm$finalModel, las = 2, cBars = 19, cex.axis = 0.6)
+
+# Check penalized logistic regression (highest accuracy) coefficients and p-value
+summary(model.glmn$finalModel) 
 ```
