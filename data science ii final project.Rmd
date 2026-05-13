@@ -18,6 +18,8 @@ library(caret)
 library(pROC)
 library(e1071)
 library(patchwork)
+library(gridExtra)
+library(knitr)
 ```
 
 # Data cleansing and NA value check
@@ -59,7 +61,8 @@ dim(dat)
 summary(severity)
 
 # obtain the mean value of continuous variable by severity
-severity |>
+mean_continuous =
+  severity |>
   group_by(severity) |>
   summarise(
     n = n(),
@@ -72,9 +75,12 @@ severity |>
     depression_mean = round(mean(depression), 1)
   )
 
+kable(mean_continuous)
+
 # obtain the proportion of continuous variable by severity
-severity |>
-  select(gender, race, smoking, diabetes, hypertension, vaccine) |>
+prop_categorical =
+  severity |>
+  select(severity, gender, race, smoking, diabetes, hypertension, vaccine) |>
   pivot_longer(
     cols = -severity,
     names_to = "variable",
@@ -83,6 +89,8 @@ severity |>
   count(severity, variable, category) |>
   group_by(severity, variable) |>
   mutate(percent = round(n / sum(n) * 100, 1))
+
+kable(prop_categorical)
 ```
 # EDA
 ```{r data_visualization}
@@ -120,27 +128,6 @@ severity |>
     y = "Value"
   )
 
-# bar plots for categorical variables distribution
-severity |>
-  select(gender, race, smoking, diabetes, hypertension, vaccine, severity) |>
-  pivot_longer(
-    cols = everything(),
-    names_to = "variable",
-    values_to = "category"
-  ) |>
-  ggplot(aes(x = category)) +
-  geom_bar(fill = "skyblue", color = "black") +
-  facet_wrap(~ variable, scales = "free_x", ncol = 3) +
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1)
-  ) +
-  labs(
-    title = "Distribution of Categorical Variables",
-    x = "Category",
-    y = "Count"
-  )
-
 # proportion bar plots to observe the relationship between each categorical variable with response variable severity
 severity |>
   select(severity, gender, race, smoking, diabetes, hypertension, vaccine) |>
@@ -157,7 +144,7 @@ severity |>
     axis.text.x = element_text(angle = 45, hjust = 1)
   ) +
   labs(
-    title = "Proportion of COVID-19 Severity by Categorical Variables",
+    title = "Proportion of Categorical Variables by severity group",
     x = "Category",
     y = "Proportion",
     fill = "Severity"
@@ -205,6 +192,9 @@ model.glmn <- train(severity ~ ., data = training_data,
                     tuneGrid = glmnGrid,
                     metric = "ROC",
                     trControl = ctrl)
+
+# display best tuning parameters
+model.glmn$bestTune
 
 # predictions on test data 
 glmn.pred.class <- predict(model.glmn, newdata = testing_data)
@@ -260,6 +250,11 @@ svm.pred <- predict(model.svm, newdata = testing_data, type = "prob")[,"Severe"]
 
 # cross validation
 ```{r CV_plots, warning=FALSE, message=FALSE}
+# CV plots for penalized logistic regression
+p_glmn <- ggplot(model.glmn, highlight = TRUE) +
+  labs(title = "Penalized Logistic Regression Cross Validation Plot") +
+  theme(plot.title = element_text(hjust = 0.5))
+
 # CV plots for boosting
 p_gbm <- ggplot(model.gbm, highlight = TRUE) +
   labs(title = "Boosting Cross Validation Plot") +
@@ -271,7 +266,8 @@ p_svm <- ggplot(model.svm, highlight = TRUE) +
   theme(plot.title = element_text(hjust = 0.5))
 
 # combine the plots into one panel
-p_gbm + p_svm
+(p_gbm + p_svm) / p_glmn +
+  plot_layout(heights = c(1, 1.2))
 ```
 
 ```{r model_training_validation}
@@ -283,10 +279,13 @@ res <- resamples(list(GLM = model.glm,
 summary(res)
 
 # boxplot of ROC performance for all models
-bwplot(res, metric = "ROC")
+p_bw <- bwplot(res, metric = "ROC")
 
 # dotplot of ROC performance for all models
-dotplot(res, metric = "ROC")
+p_dot <- dotplot(res, metric = "ROC")
+
+# combine the plots into one panel
+grid.arrange(p_bw, p_dot, ncol = 2)
 ```
 
 # model selection
@@ -327,10 +326,31 @@ conf_matrix_svm$overall["Accuracy"]
 
 # variable importance
 ```{r variable_importance}
-# variable importance of boosting model (highest AUC)
-par(mar = c(5, 14, 4, 2))
-summary(model.gbm$finalModel, las = 2, cBars = 19, cex.axis = 0.6)
+# variable importance of penalized logistic regression model (best model)
+glmn_imp <- varImp(model.glmn)
+plot(glmn_imp, main = "Variable Importance from Penalized Logistic Regression")
 
-# Check penalized logistic regression (highest accuracy) coefficients and p-value
-summary(model.glmn$finalModel) 
+# Check coefficients to observe the direction of impact
+coef(model.glmn$finalModel, s = model.glmn$bestTune$lambda) 
+```
+
+# Risk score
+```{r risk_score}
+# predict probability from penalized logistical regression (best model)
+glmn.pred
+
+# visulized distribution of the probability
+risk_df <- data.frame(risk_score = glmn.pred,
+                      severity = testing_data$severity)
+
+ggplot(risk_df, aes(x = risk_score, fill = severity)) +
+  geom_histogram(bins = 30, alpha = 0.6, position = "identity", color = "black") +
+  scale_fill_manual(values = c("Not_severe" = "blue", "Severe" = "red")) +
+  labs(
+    title = "Distribution of Predicted Risk Scores",
+    x = "Predicted Probability of Severe Infection",
+    y = "Count",
+    fill = "True Severity"
+  ) +
+  theme_minimal()
 ```
